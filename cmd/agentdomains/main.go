@@ -27,6 +27,7 @@ COMMANDS
   list                   List your domains
   get <label>            Show one domain and its records
   record <label>         Add a DNS record to a domain
+  forward <label> <url>  Forward <label>.<domain> to a URL (claims it if needed)
   ns <label> <ns>...     Delegate the domain to your own nameservers
   txt <label> <value>    Add a TXT record (e.g. for ACME / SSL challenges)
   delete <label>         Delete a domain and its records
@@ -64,6 +65,10 @@ func main() {
 		cmdGet(args)
 	case "record":
 		cmdRecord(args)
+	case "forward":
+		cmdForward(args)
+	case "unforward":
+		cmdUnforward(args)
 	case "ns":
 		cmdNS(args)
 	case "txt":
@@ -251,6 +256,10 @@ func cmdList(args []string) {
 		}
 		for _, s := range subs {
 			sd := s.(map[string]any)
+			if f, ok := sd["forward"].(map[string]any); ok && f != nil {
+				fmt.Printf("%-32v  forward -> %v\n", sd["fqdn"], f["target"])
+				continue
+			}
 			recs, _ := sd["records"].([]any)
 			fmt.Printf("%-32v  %d record(s)  delegated=%v\n", sd["fqdn"], len(recs), sd["delegated"])
 		}
@@ -268,6 +277,13 @@ func cmdGet(args []string) {
 	check(c.Do("GET", resourcePath(pos[0], g, ""), nil, &resp))
 	out(g, resp, func(m map[string]any) {
 		fmt.Printf("%v (delegated=%v)\n", m["fqdn"], m["delegated"])
+		if f, ok := m["forward"].(map[string]any); ok && f != nil {
+			code := 302
+			if c, ok := f["code"].(float64); ok {
+				code = int(c)
+			}
+			fmt.Printf("  FWD    %v -> %v (%d)\n", m["fqdn"], f["target"], code)
+		}
 		recs, _ := m["records"].([]any)
 		for _, r := range recs {
 			rec := r.(map[string]any)
@@ -291,6 +307,63 @@ func cmdRecord(args []string) {
 	check(c.Do("POST", resourcePath(pos[0], g, "/records"), body, &resp))
 	out(g, resp, func(m map[string]any) {
 		fmt.Printf("✓ %v %v -> %v\n", m["type"], m["name"], m["content"])
+	})
+}
+
+func cmdForward(args []string) {
+	fs, g := newFlagSet("forward")
+	permanent := fs.Bool("permanent", false, "use a 301 permanent redirect (default: 302 temporary)")
+	temporary := fs.Bool("temporary", false, "use a 302 temporary redirect (the default)")
+	noPreservePath := fs.Bool("no-preserve-path", false, "always land on the target root, ignoring the request path/query")
+	cloak := fs.Bool("cloak", false, "keep your domain in the address bar and load the target in a frame (discouraged)")
+	pos := parse(fs, args)
+	if len(pos) < 2 {
+		fail("usage: agentdomains forward <label> <url> [--permanent] [--no-preserve-path] [--cloak]")
+	}
+	if *permanent && *temporary {
+		fail("--permanent and --temporary are mutually exclusive")
+	}
+	c, _ := mustClient(g, true)
+	body := map[string]any{
+		"target":        pos[1],
+		"permanent":     *permanent,
+		"preserve_path": !*noPreservePath,
+		"cloak":         *cloak,
+	}
+	if g.domain != "" {
+		body["domain"] = g.domain
+	}
+	var resp map[string]any
+	check(c.Do("PUT", resourcePath(pos[0], g, "/forward"), body, &resp))
+	out(g, resp, func(m map[string]any) {
+		f, _ := m["forward"].(map[string]any)
+		kind := "→ (302 temporary"
+		if code, ok := f["code"].(float64); ok && int(code) == 301 {
+			kind = "→ (301 permanent"
+		}
+		if pp, ok := f["preserve_path"].(bool); ok && pp {
+			kind += ", path preserved"
+		}
+		if cl, ok := f["cloak"].(bool); ok && cl {
+			kind += ", cloaked"
+		}
+		kind += ")"
+		fmt.Printf("✓ %v %s %v\n", m["fqdn"], kind, f["target"])
+		fmt.Println("  DNS is live within seconds; HTTPS may take a minute on first use.")
+	})
+}
+
+func cmdUnforward(args []string) {
+	fs, g := newFlagSet("unforward")
+	pos := parse(fs, args)
+	if len(pos) < 1 {
+		fail("usage: agentdomains unforward <label> [--domain makes.fyi]")
+	}
+	c, _ := mustClient(g, true)
+	var resp map[string]any
+	check(c.Do("DELETE", resourcePath(pos[0], g, "/forward"), nil, &resp))
+	out(g, resp, func(m map[string]any) {
+		fmt.Printf("✓ Removed forward on %v\n", m["fqdn"])
 	})
 }
 
