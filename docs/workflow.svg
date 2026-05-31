@@ -1,68 +1,64 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="980" height="340" viewBox="0 0 980 340" font-family="'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="300" viewBox="0 0 980 300" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
   <defs>
     <style>
-      .card{fill:#FFFFFF;stroke:#141210;stroke-width:2;rx:18;}
-      .title{font-weight:800;font-size:18px;fill:#141210;}
-      .desc{font-size:13px;fill:#5d574e;}
-      .chip{fill:#141210;rx:9;}
-      .code{font-family:'SFMono-Regular',ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;fill:#7fe3a1;}
-      .num{font-weight:800;font-size:15px;fill:#ffffff;}
-      .kick{font-weight:800;font-size:13px;letter-spacing:.12em;fill:#2D6BFF;}
+      .title{font-weight:700;font-size:18px;fill:#0A0A0A;}
+      .desc{font-size:13px;fill:#6b6b6b;}
+      .code{font-family:ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;font-size:11.5px;fill:#0A0A0A;}
+      .num{font-weight:700;font-size:13px;fill:#0A0A0A;}
     </style>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L6,3 L0,6 Z" fill="#2D6BFF"/>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#00CC74"/>
     </marker>
   </defs>
 
-  <!-- panel background (reads cleanly on light or dark) -->
-  <rect x="1" y="1" width="978" height="338" rx="22" fill="#FFFFFF" stroke="#E4E8F0" stroke-width="2"/>
+  <rect x="1" y="1" width="978" height="298" rx="20" fill="#FFFFFF" stroke="#ECECEC" stroke-width="2"/>
 
   <!-- header -->
-  <text x="40" y="50" font-weight="800" font-size="22" fill="#141210">agent<tspan fill="#2D6BFF">·</tspan>domains</text>
-  <text x="40" y="74" class="desc" font-size="14">A free public domain for the sites your AI agents build — in one command.</text>
+  <text x="40" y="48" font-weight="800" font-size="22" fill="#0A0A0A">agent<tspan fill="#00CC74">·</tspan>domains</text>
+  <text x="40" y="72" class="desc" font-size="14">Free domains for the sites your AI agents build. One command.</text>
 
-  <!-- arrows between cards (drawn first, behind) -->
-  <line x1="248" y1="210" x2="270" y2="210" stroke="#2D6BFF" stroke-width="3" marker-end="url(#arrow)"/>
-  <line x1="488" y1="210" x2="510" y2="210" stroke="#2D6BFF" stroke-width="3" marker-end="url(#arrow)"/>
-  <line x1="728" y1="210" x2="750" y2="210" stroke="#2D6BFF" stroke-width="3" marker-end="url(#arrow)"/>
+  <!-- arrows -->
+  <line x1="250" y1="185" x2="272" y2="185" stroke="#00CC74" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <line x1="490" y1="185" x2="512" y2="185" stroke="#00CC74" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <line x1="730" y1="185" x2="752" y2="185" stroke="#00CC74" stroke-width="2.5" marker-end="url(#arrow)"/>
 
-  <!-- Card 1: signup -->
-  <rect x="40"  y="100" width="200" height="200" rx="18" class="card"/>
-  <circle cx="72" cy="138" r="17" fill="#2D6BFF"/>
-  <text x="72" y="143" text-anchor="middle" class="num">1</text>
-  <text x="100" y="144" class="title">signup</text>
-  <rect x="56" y="166" width="168" height="30" class="chip"/>
-  <text x="68" y="186" class="code">agentdomains signup</text>
-  <text x="56" y="228" class="desc">Instant API key.</text>
-  <text x="56" y="248" class="desc">No email to start.</text>
+  <!-- 1: signup -->
+  <rect x="40"  y="100" width="200" height="170" rx="16" fill="#FFFFFF" stroke="#ECECEC" stroke-width="2"/>
+  <circle cx="68" cy="134" r="13" fill="#EFFCF5" stroke="#00CC74" stroke-width="2"/>
+  <text x="68" y="139" text-anchor="middle" class="num">1</text>
+  <text x="92" y="139" class="title">signup</text>
+  <rect x="56" y="158" width="168" height="28" rx="8" fill="#EFFCF5"/>
+  <text x="68" y="177" class="code">agentdomains signup</text>
+  <text x="56" y="216" class="desc">An API key in seconds.</text>
+  <text x="56" y="236" class="desc">No email needed.</text>
 
-  <!-- Card 2: claim -->
-  <rect x="280" y="100" width="200" height="200" rx="18" class="card"/>
-  <circle cx="312" cy="138" r="17" fill="#2D6BFF"/>
-  <text x="312" y="143" text-anchor="middle" class="num">2</text>
-  <text x="340" y="144" class="title">claim</text>
-  <rect x="296" y="166" width="168" height="30" class="chip"/>
-  <text x="308" y="186" class="code">agentdomains claim myapp</text>
-  <text x="296" y="228" class="desc">Pick makes.fyi or</text>
-  <text x="296" y="248" class="desc">agentdomains.co.</text>
+  <!-- 2: claim -->
+  <rect x="280" y="100" width="200" height="170" rx="16" fill="#FFFFFF" stroke="#ECECEC" stroke-width="2"/>
+  <circle cx="308" cy="134" r="13" fill="#EFFCF5" stroke="#00CC74" stroke-width="2"/>
+  <text x="308" y="139" text-anchor="middle" class="num">2</text>
+  <text x="332" y="139" class="title">claim</text>
+  <rect x="296" y="158" width="168" height="28" rx="8" fill="#EFFCF5"/>
+  <text x="308" y="177" class="code">agentdomains claim myapp</text>
+  <text x="296" y="216" class="desc">Under makes.fyi or</text>
+  <text x="296" y="236" class="desc">agentdomains.co.</text>
 
-  <!-- Card 3: point -->
-  <rect x="520" y="100" width="200" height="200" rx="18" class="card"/>
-  <circle cx="552" cy="138" r="17" fill="#2D6BFF"/>
-  <text x="552" y="143" text-anchor="middle" class="num">3</text>
-  <text x="580" y="144" class="title">point</text>
-  <rect x="536" y="166" width="168" height="30" class="chip"/>
-  <text x="548" y="186" class="code">--type A --content 1.2.3.4</text>
-  <text x="536" y="228" class="desc">DNS record created</text>
-  <text x="536" y="248" class="desc">at the Cloudflare edge.</text>
+  <!-- 3: point -->
+  <rect x="520" y="100" width="200" height="170" rx="16" fill="#FFFFFF" stroke="#ECECEC" stroke-width="2"/>
+  <circle cx="548" cy="134" r="13" fill="#EFFCF5" stroke="#00CC74" stroke-width="2"/>
+  <text x="548" y="139" text-anchor="middle" class="num">3</text>
+  <text x="572" y="139" class="title">point</text>
+  <rect x="536" y="158" width="168" height="28" rx="8" fill="#EFFCF5"/>
+  <text x="548" y="177" class="code">--type A --content 1.2.3.4</text>
+  <text x="536" y="216" class="desc">Records land at the</text>
+  <text x="536" y="236" class="desc">Cloudflare edge.</text>
 
-  <!-- Card 4: live -->
-  <rect x="760" y="100" width="200" height="200" rx="18" class="card" stroke="#2D6BFF"/>
-  <circle cx="792" cy="138" r="17" fill="#16a34a"/>
-  <text x="792" y="144" text-anchor="middle" class="num">✓</text>
-  <text x="820" y="144" class="title">live</text>
-  <rect x="776" y="166" width="168" height="30" class="chip"/>
-  <text x="788" y="186" class="code">myapp.agentdomains.co</text>
-  <text x="776" y="228" class="desc">Resolves on the</text>
-  <text x="776" y="248" class="desc">public internet. ✨</text>
+  <!-- 4: live -->
+  <rect x="760" y="100" width="200" height="170" rx="16" fill="#FFFFFF" stroke="#00CC74" stroke-width="2"/>
+  <circle cx="788" cy="134" r="13" fill="#00CC74"/>
+  <text x="788" y="139" text-anchor="middle" class="num" fill="#FFFFFF">✓</text>
+  <text x="812" y="139" class="title">live</text>
+  <rect x="776" y="158" width="168" height="28" rx="8" fill="#0A0A0A"/>
+  <text x="788" y="177" class="code" fill="#7fe3a1">myapp.makes.fyi</text>
+  <text x="776" y="216" class="desc">Resolving on the</text>
+  <text x="776" y="236" class="desc">public internet.</text>
 </svg>

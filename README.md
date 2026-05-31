@@ -2,7 +2,7 @@
 
 # agent·domains
 
-### Free public domains for the sites your AI agents build — in one command.
+### Free public domains for the sites your AI agents build. One command.
 
 [![Release](https://img.shields.io/github/v/release/tashfeenahmed/AgentDomains?sort=semver&color=2D6BFF&label=release)](https://github.com/tashfeenahmed/AgentDomains/releases)
 [![Go Reference](https://pkg.go.dev/badge/github.com/tashfeenahmed/AgentDomains.svg)](https://pkg.go.dev/github.com/tashfeenahmed/AgentDomains)
@@ -20,9 +20,9 @@
 </p>
 
 When an AI agent builds a website or an API, it needs a domain to serve it on.
-**AgentDomains** hands one out from a single CLI command — `yourname.makes.fyi` or
-`yourname.agentdomains.co` — and the agent can wire it up by itself. No web forms,
-no email required to start.
+**AgentDomains** hands one out from a single CLI command (`yourname.makes.fyi` or
+`yourname.agentdomains.co`), and the agent wires it up by itself. No email required
+to start.
 
 ```bash
 agentdomains signup
@@ -32,7 +32,7 @@ agentdomains claim myapp --type A --content 203.0.113.10
 
 ## Why it's built for agents
 
-- **No human in the loop to start.** `signup` issues an API key instantly. The account
+- **No human in the loop to start.** `signup` issues an API key right away. The account
   is *provisional* for 30 days; a human validates it later (one email link) to keep it.
 - **Two domains, your pick.** Claim under `makes.fyi` (default) or `agentdomains.co`
   with `--domain`. The same label can live under each independently.
@@ -40,7 +40,7 @@ agentdomains claim myapp --type A --content 203.0.113.10
   pass credentials via env vars so there's no interactive setup in a sandbox.
 - **Bring your own SSL.** Point a domain at your server (Let's Encrypt HTTP-01 just
   works) or add a TXT record with `agentdomains txt` for DNS-01 challenges.
-- **Zero dependencies.** A single small Go binary, standard library only — readable
+- **Zero dependencies.** A single small Go binary, standard library only. It reads
   end to end, and the API token never lives in the client.
 
 ## Install
@@ -74,7 +74,7 @@ agentdomains claim myapp --domain agentdomains.co --type A --content 203.0.113.1
 | `agentdomains list` | List your domains |
 | `agentdomains get <label>` | Show one domain and its records |
 | `agentdomains record <label> --type A --content <ip>` | Add a DNS record |
-| `agentdomains forward <label> <url>` | Forward (HTTP redirect) the subdomain to a URL — claims it if needed |
+| `agentdomains forward <label> <url>` | Forward (HTTP redirect) the subdomain to a URL; claims it if needed |
 | `agentdomains unforward <label>` | Remove a forward (keeps the label) |
 | `agentdomains ns <label> <ns1> <ns2>` | Delegate the domain to your own nameservers |
 | `agentdomains txt <label> <value> [--host _acme-challenge]` | Add a TXT record (for SSL) |
@@ -82,7 +82,7 @@ agentdomains claim myapp --domain agentdomains.co --type A --content 203.0.113.1
 
 **Global flags:** `--json` (machine output), `--api-url` (override endpoint),
 `--domain` (which domain to act under). **Env:** `AGENTDOMAINS_API_KEY`,
-`AGENTDOMAINS_API_URL` — handy for non-interactive / sandboxed agents.
+`AGENTDOMAINS_API_URL`, handy for non-interactive or sandboxed agents.
 
 ## Example: an agent gives itself a public HTTPS endpoint
 
@@ -108,8 +108,8 @@ agentdomains forward me https://my-portfolio.example.com
 #   --no-preserve-path  always land on the target root
 ```
 
-Forwards are real HTTP redirects served at Cloudflare's edge with valid HTTPS;
-the request path and query are preserved by default.
+Forwards are real HTTP redirects served at Cloudflare's edge with valid HTTPS.
+The request path and query are preserved by default.
 
 ## Quotas
 
@@ -127,6 +127,6 @@ There's a ready-made skill that teaches an agent to use this CLI:
 
 ## License
 
-[FSL-1.1-Apache-2.0](./LICENSE) — the [Functional Source License](https://fsl.software):
+[FSL-1.1-Apache-2.0](./LICENSE), the [Functional Source License](https://fsl.software):
 free to use, modify, and redistribute for any purpose **except** building a competing
 product or service. Converts to Apache-2.0 two years after each release.
