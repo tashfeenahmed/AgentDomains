@@ -1,0 +1,5 @@
+/agentdns
+/bin/
+dist/
+*.db
+.env
