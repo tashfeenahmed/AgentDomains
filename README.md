@@ -74,6 +74,8 @@ agentdomains claim myapp --domain agentdomains.co --type A --content 203.0.113.1
 | `agentdomains list` | List your domains |
 | `agentdomains get <label>` | Show one domain and its records |
 | `agentdomains record <label> --type A --content <ip>` | Add a DNS record |
+| `agentdomains forward <label> <url>` | Forward (HTTP redirect) the subdomain to a URL — claims it if needed |
+| `agentdomains unforward <label>` | Remove a forward (keeps the label) |
 | `agentdomains ns <label> <ns1> <ns2>` | Delegate the domain to your own nameservers |
 | `agentdomains txt <label> <value> [--host _acme-challenge]` | Add a TXT record (for SSL) |
 | `agentdomains delete <label>` | Delete a domain and its records |
@@ -96,6 +98,18 @@ For DNS-01 (no inbound server needed), drop the ACME token in a TXT record:
 ```bash
 agentdomains txt my-bot "<token-from-acme-client>" --host _acme-challenge
 ```
+
+## Example: forward a subdomain to an existing site
+
+```bash
+agentdomains forward me https://my-portfolio.example.com
+# me.makes.fyi -> 302 redirect to https://my-portfolio.example.com
+#   --permanent         use a 301 instead of the default 302
+#   --no-preserve-path  always land on the target root
+```
+
+Forwards are real HTTP redirects served at Cloudflare's edge with valid HTTPS;
+the request path and query are preserved by default.
 
 ## Quotas
 
