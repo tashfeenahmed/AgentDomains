@@ -1,4 +1,4 @@
-// Package config persists the CLI's API endpoint and key under ~/.agentdns/config.json.
+// Package config persists the CLI's API endpoint and key under ~/.agentdomains/config.json.
 package config
 
 import (
@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-const DefaultAPIURL = "https://api.makes.fyi"
+const DefaultAPIURL = "https://api.agentdomains.co"
 
 type Config struct {
 	APIURL    string `json:"api_url"`
@@ -20,7 +20,7 @@ func dir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".agentdns"), nil
+	return filepath.Join(home, ".agentdomains"), nil
 }
 
 func path() (string, error) {
@@ -32,6 +32,8 @@ func path() (string, error) {
 }
 
 // Load reads config from disk, then applies env overrides (handy for agents/CI).
+// The AGENTDOMAINS_* env vars are preferred; the older AGENTDNS_* names are still
+// honored so existing setups keep working.
 func Load() Config {
 	c := Config{APIURL: DefaultAPIURL}
 	if p, err := path(); err == nil {
@@ -42,13 +44,22 @@ func Load() Config {
 	if c.APIURL == "" {
 		c.APIURL = DefaultAPIURL
 	}
-	if v := os.Getenv("AGENTDNS_API_URL"); v != "" {
+	if v := firstEnv("AGENTDOMAINS_API_URL", "AGENTDNS_API_URL"); v != "" {
 		c.APIURL = v
 	}
-	if v := os.Getenv("AGENTDNS_API_KEY"); v != "" {
+	if v := firstEnv("AGENTDOMAINS_API_KEY", "AGENTDNS_API_KEY"); v != "" {
 		c.APIKey = v
 	}
 	return c
+}
+
+func firstEnv(keys ...string) string {
+	for _, k := range keys {
+		if v := os.Getenv(k); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func Save(c Config) error {

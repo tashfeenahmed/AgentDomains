@@ -1,4 +1,4 @@
-// Package client is a thin HTTP client for the AgentDNS API.
+// Package client is a thin HTTP client for the AgentDomains API.
 package client
 
 import (
@@ -44,7 +44,7 @@ func (c *Client) Do(method, path string, body any, out any) error {
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("cannot reach AgentDNS API at %s: %w", c.baseURL, err)
+		return fmt.Errorf("cannot reach AgentDomains API at %s: %w", c.baseURL, err)
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)

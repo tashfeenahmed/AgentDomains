@@ -1,3 +1,3 @@
-module github.com/tashfeenahmed/AgentDNS
+module github.com/tashfeenahmed/AgentDomains
 
 go 1.26

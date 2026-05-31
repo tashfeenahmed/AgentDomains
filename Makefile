@@ -1,5 +1,5 @@
-BINARY := agentdns
-PKG := ./cmd/agentdns
+BINARY := agentdomains
+PKG := ./cmd/agentdomains
 
 .PHONY: build install test clean dist
 
