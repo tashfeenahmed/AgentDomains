@@ -182,7 +182,11 @@ func cmdSignup(args []string) {
 	}
 	out(g, resp, func(m map[string]any) {
 		fmt.Println("✓ Account created. API key saved to ~/.agentdomains/config.json")
-		fmt.Printf("  account: %v\n  quota:   %v domain(s)\n", m["account_id"], m["quota"])
+		q := quotaText(m["quota"])
+		if q != "unlimited" {
+			q += " domain(s)"
+		}
+		fmt.Printf("  account: %v\n  quota:   %s\n", m["account_id"], q)
 		fmt.Println("\n  This is a PROVISIONAL account. Validate within 30 days to keep it:")
 		fmt.Println("    agentdomains email you@example.com   # then click the link we send")
 	})
@@ -198,7 +202,7 @@ func cmdWhoami(args []string) {
 		fmt.Printf("account:        %v\n", m["account_id"])
 		fmt.Printf("state:          %v\n", m["state"])
 		fmt.Printf("email:          %v (verified: %v)\n", orDash(m["email"]), m["email_verified"])
-		fmt.Printf("domains used:   %v / %v\n", m["used"], m["quota"])
+		fmt.Printf("domains used:   %v / %s\n", m["used"], quotaText(m["quota"]))
 		if d, ok := m["domains"].([]any); ok && len(d) > 0 {
 			fmt.Printf("available:      %v\n", joinAny(d))
 		}
@@ -460,6 +464,18 @@ func cmdDelete(args []string) {
 	out(g, resp, func(m map[string]any) {
 		fmt.Printf("✓ Deleted %v\n", m["deleted"])
 	})
+}
+
+// quotaText renders a quota value: "unlimited" when it's 0 or less (quotas
+// disabled), otherwise the number. JSON numbers arrive as float64.
+func quotaText(v any) string {
+	if f, ok := v.(float64); ok {
+		if f <= 0 {
+			return "unlimited"
+		}
+		return fmt.Sprintf("%d", int(f))
+	}
+	return fmt.Sprintf("%v", v)
 }
 
 func joinAny(items []any) string {
