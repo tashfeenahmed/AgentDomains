@@ -23,7 +23,8 @@ COMMANDS
   signup                 Create an account and save the API key locally
   whoami                 Show your account, quota, usage, and available domains
   email <address>        Attach an email so a human can validate the account
-  claim <label>          Claim <label>.<domain> (default domain: makes.fyi)
+  claim <label>          Register <label>.<domain> (needs --email the first time;
+                         confirm within 30 days or it's deleted)
   list                   List your domains
   get <label>            Show one domain and its records
   record <label>         Add a DNS record to a domain
@@ -225,17 +226,21 @@ func cmdEmail(args []string) {
 
 func cmdClaim(args []string) {
 	fs, g := newFlagSet("claim")
+	email := fs.String("email", "", "your email — required the first time you register a name; we send a confirmation link")
 	typ := fs.String("type", "", "record type to create immediately (A, AAAA, CNAME, TXT)")
 	content := fs.String("content", "", "record value (e.g. an IP or hostname)")
 	host := fs.String("host", "", "optional sub-label (e.g. www)")
 	pos := parse(fs, args)
 	if len(pos) < 1 {
-		fail("usage: agentdomains claim <label> [--domain makes.fyi] [--type A --content 1.2.3.4]")
+		fail("usage: agentdomains claim <label> --email you@example.com [--domain makes.fyi] [--type A --content 1.2.3.4]")
 	}
 	c, _ := mustClient(g, true)
 	body := map[string]any{"label": pos[0]}
 	if g.domain != "" {
 		body["domain"] = g.domain
+	}
+	if *email != "" {
+		body["email"] = *email
 	}
 	if *typ != "" {
 		body["type"] = *typ
@@ -245,9 +250,12 @@ func cmdClaim(args []string) {
 	var resp map[string]any
 	check(c.Do("POST", "/v1/subdomains", body, &resp))
 	out(g, resp, func(m map[string]any) {
-		fmt.Printf("✓ Claimed %v\n", m["fqdn"])
+		fmt.Printf("✓ Registered %v\n", m["fqdn"])
 		if rec, ok := m["record"].(map[string]any); ok && rec != nil {
 			fmt.Printf("  record: %v %v -> %v\n", rec["type"], rec["name"], rec["content"])
+		}
+		if note, ok := m["note"].(string); ok && note != "" {
+			fmt.Printf("  ✉ %s\n", note)
 		}
 	})
 }
@@ -329,13 +337,14 @@ func cmdRecord(args []string) {
 
 func cmdForward(args []string) {
 	fs, g := newFlagSet("forward")
+	email := fs.String("email", "", "your email — required if this also claims a new name on an account with no email yet")
 	permanent := fs.Bool("permanent", false, "use a 301 permanent redirect (default: 302 temporary)")
 	temporary := fs.Bool("temporary", false, "use a 302 temporary redirect (the default)")
 	noPreservePath := fs.Bool("no-preserve-path", false, "always land on the target root, ignoring the request path/query")
 	cloak := fs.Bool("cloak", false, "keep your domain in the address bar and load the target in a frame (discouraged)")
 	pos := parse(fs, args)
 	if len(pos) < 2 {
-		fail("usage: agentdomains forward <label> <url> [--permanent] [--no-preserve-path] [--cloak]")
+		fail("usage: agentdomains forward <label> <url> [--email you@example.com] [--permanent] [--no-preserve-path] [--cloak]")
 	}
 	if *permanent && *temporary {
 		fail("--permanent and --temporary are mutually exclusive")
@@ -349,6 +358,9 @@ func cmdForward(args []string) {
 	}
 	if g.domain != "" {
 		body["domain"] = g.domain
+	}
+	if *email != "" {
+		body["email"] = *email
 	}
 	var resp map[string]any
 	check(c.Do("PUT", resourcePath(pos[0], g, "/forward"), body, &resp))
@@ -367,6 +379,9 @@ func cmdForward(args []string) {
 		kind += ")"
 		fmt.Printf("✓ %v %s %v\n", m["fqdn"], kind, f["target"])
 		fmt.Println("  DNS is live within seconds; HTTPS may take a minute on first use.")
+		if note, ok := m["note"].(string); ok && note != "" {
+			fmt.Printf("  ✉ %s\n", note)
+		}
 	})
 }
 
@@ -386,15 +401,19 @@ func cmdUnforward(args []string) {
 
 func cmdProxy(args []string) {
 	fs, g := newFlagSet("proxy")
+	email := fs.String("email", "", "your email — required if this also claims a new name on an account with no email yet")
 	pos := parse(fs, args)
 	if len(pos) < 2 {
-		fail("usage: agentdomains proxy <label> <origin-host> [--domain makes.fyi]\n" +
+		fail("usage: agentdomains proxy <label> <origin-host> [--email you@example.com] [--domain makes.fyi]\n" +
 			"  e.g. agentdomains proxy shop myapp.fly.dev")
 	}
 	c, _ := mustClient(g, true)
 	body := map[string]any{"origin": pos[1]}
 	if g.domain != "" {
 		body["domain"] = g.domain
+	}
+	if *email != "" {
+		body["email"] = *email
 	}
 	var resp map[string]any
 	check(c.Do("PUT", resourcePath(pos[0], g, "/proxy"), body, &resp))
@@ -404,6 +423,9 @@ func cmdProxy(args []string) {
 		fmt.Println("  DNS is live within seconds; HTTPS may take a minute on first use.")
 		fmt.Println("  Note: apps that hardcode their own hostname (e.g. OAuth logins) may")
 		fmt.Println("  need that hostname added on their side for every flow to work.")
+		if note, ok := m["note"].(string); ok && note != "" {
+			fmt.Printf("  ✉ %s\n", note)
+		}
 	})
 }
 
