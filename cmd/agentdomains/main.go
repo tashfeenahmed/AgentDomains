@@ -28,6 +28,8 @@ COMMANDS
   get <label>            Show one domain and its records
   record <label>         Add a DNS record to a domain
   forward <label> <url>  Forward <label>.<domain> to a URL (claims it if needed)
+  proxy <label> <host>   Serve a backend at <label>.<domain> over HTTPS — our cert,
+                         your origin, no setup on the origin (claims it if needed)
   ns <label> <ns>...     Delegate the domain to your own nameservers
   txt <label> <value>    Add a TXT record (e.g. for ACME / SSL challenges)
   delete <label>         Delete a domain and its records
@@ -69,6 +71,10 @@ func main() {
 		cmdForward(args)
 	case "unforward":
 		cmdUnforward(args)
+	case "proxy":
+		cmdProxy(args)
+	case "unproxy":
+		cmdUnproxy(args)
 	case "ns":
 		cmdNS(args)
 	case "txt":
@@ -260,6 +266,10 @@ func cmdList(args []string) {
 				fmt.Printf("%-32v  forward -> %v\n", sd["fqdn"], f["target"])
 				continue
 			}
+			if p, ok := sd["proxy"].(map[string]any); ok && p != nil {
+				fmt.Printf("%-32v  proxy -> %v\n", sd["fqdn"], p["origin"])
+				continue
+			}
 			recs, _ := sd["records"].([]any)
 			fmt.Printf("%-32v  %d record(s)  delegated=%v\n", sd["fqdn"], len(recs), sd["delegated"])
 		}
@@ -283,6 +293,9 @@ func cmdGet(args []string) {
 				code = int(c)
 			}
 			fmt.Printf("  FWD    %v -> %v (%d)\n", m["fqdn"], f["target"], code)
+		}
+		if p, ok := m["proxy"].(map[string]any); ok && p != nil {
+			fmt.Printf("  PROXY  %v -> %v\n", m["fqdn"], p["origin"])
 		}
 		recs, _ := m["records"].([]any)
 		for _, r := range recs {
@@ -364,6 +377,43 @@ func cmdUnforward(args []string) {
 	check(c.Do("DELETE", resourcePath(pos[0], g, "/forward"), nil, &resp))
 	out(g, resp, func(m map[string]any) {
 		fmt.Printf("✓ Removed forward on %v\n", m["fqdn"])
+	})
+}
+
+func cmdProxy(args []string) {
+	fs, g := newFlagSet("proxy")
+	pos := parse(fs, args)
+	if len(pos) < 2 {
+		fail("usage: agentdomains proxy <label> <origin-host> [--domain makes.fyi]\n" +
+			"  e.g. agentdomains proxy shop myapp.fly.dev")
+	}
+	c, _ := mustClient(g, true)
+	body := map[string]any{"origin": pos[1]}
+	if g.domain != "" {
+		body["domain"] = g.domain
+	}
+	var resp map[string]any
+	check(c.Do("PUT", resourcePath(pos[0], g, "/proxy"), body, &resp))
+	out(g, resp, func(m map[string]any) {
+		p, _ := m["proxy"].(map[string]any)
+		fmt.Printf("✓ %v serves %v (reverse proxy, HTTPS at our edge)\n", m["fqdn"], p["origin"])
+		fmt.Println("  DNS is live within seconds; HTTPS may take a minute on first use.")
+		fmt.Println("  Note: apps that hardcode their own hostname (e.g. OAuth logins) may")
+		fmt.Println("  need that hostname added on their side for every flow to work.")
+	})
+}
+
+func cmdUnproxy(args []string) {
+	fs, g := newFlagSet("unproxy")
+	pos := parse(fs, args)
+	if len(pos) < 1 {
+		fail("usage: agentdomains unproxy <label> [--domain makes.fyi]")
+	}
+	c, _ := mustClient(g, true)
+	var resp map[string]any
+	check(c.Do("DELETE", resourcePath(pos[0], g, "/proxy"), nil, &resp))
+	out(g, resp, func(m map[string]any) {
+		fmt.Printf("✓ Removed proxy on %v\n", m["fqdn"])
 	})
 }
 
