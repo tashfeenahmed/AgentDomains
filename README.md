@@ -83,14 +83,16 @@ Labels are lowercased when you claim them, so `MyApp` becomes `myapp.makes.fyi`.
 | `agentdomains claim <label>` | Claim `<label>.makes.fyi` (or `--domain agentdomains.co`); `--email` is required on the account's first claim; optionally `--type/--content/--host` |
 | `agentdomains list` | List your domains |
 | `agentdomains get <label>` | Show one domain and its records |
-| `agentdomains record <label> --type A --content <ip>` | Add a DNS record |
-| `agentdomains forward <label> <url>` | Forward (HTTP redirect) the subdomain to a URL; claims it if needed |
+| `agentdomains record <label> --type A --content <ip>` | Add a DNS record (prints the record id) |
+| `agentdomains unrecord <label> <record-id>` | Remove one record, keeping the name (ids come from `get`) |
+| `agentdomains forward <label> <url>` | Forward (HTTP redirect) the subdomain to a URL; claims it if needed, and replaces any address record on the name |
 | `agentdomains unforward <label>` | Remove a forward (keeps the label) |
-| `agentdomains proxy <label> <host>` | Serve a backend at the subdomain over HTTPS on our certificate; claims it if needed |
+| `agentdomains proxy <label> <host>` | Serve a backend at the subdomain over HTTPS on our certificate; claims it if needed, and replaces any address record on the name |
 | `agentdomains unproxy <label>` | Tear the reverse proxy down (keeps the label) |
 | `agentdomains ns <label> <ns1> <ns2>` | Delegate the domain to your own nameservers |
 | `agentdomains txt <label> <value> [--host _acme-challenge]` | Add a TXT record (for SSL) |
 | `agentdomains delete <label>` | Delete a domain and its records |
+| `agentdomains account delete [--force]` | Close the account and invalidate its key; `--force` also deletes the names it holds |
 | `agentdomains version` | Print the CLI version |
 
 **Global flags:** `--json` (machine output), `--api-url` (override endpoint),
@@ -124,10 +126,39 @@ agentdomains forward me https://my-portfolio.example.com
 Forwards are real HTTP redirects served at Cloudflare's edge with valid HTTPS.
 The request path and query are preserved by default.
 
-## Quotas
+**A forward or a proxy takes the hostname over.** Any `A`/`AAAA`/`CNAME` sitting on
+the name itself is deleted as part of the call and reported back, so you can see
+what you traded:
 
-Provisional accounts get **1** domain. Validate (attach + confirm an email) to raise it
-to **3**. Unvalidated accounts and their domains expire after 30 days.
+```text
+✓ shop.makes.fyi → (302 temporary, path preserved) https://example.com
+  1 record(s) replaced by the forward:
+    A shop.makes.fyi -> 203.0.113.10
+```
+
+Records on a sub-label (`www.shop.makes.fyi`) are separate hostnames and survive.
+If the forward then fails to come up, the replaced records are put back — with new
+ids, so re-read them with `get` before using `unrecord`.
+
+## Undoing things
+
+```bash
+agentdomains get myapp                       # record ids are printed next to each record
+agentdomains unrecord myapp <record-id>      # drop one record, keep the name
+agentdomains delete myapp                    # drop the name and everything on it
+agentdomains account delete                  # close the account (refuses while names are held)
+agentdomains account delete --force          # …and take the names with it
+```
+
+`account delete` clears the saved API key, because it stops working the moment the
+account is gone. Re-claiming a name you already hold is not an error: it prints
+"you already own …" and exits 0, so a claim is safe to run twice.
+
+## How many names
+
+Per-account quotas are currently **off** — `whoami` says `unlimited` — but one account
+may hold at most **10** names at a time. Delete one you no longer use to free a slot.
+Accounts whose email is never confirmed, and the names on them, are deleted after 30 days.
 
 ## Using it from Claude / agents
 

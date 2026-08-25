@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net/url"
@@ -15,7 +16,7 @@ import (
 )
 
 // version is stamped at build time with
-// -ldflags "-X main.version=v0.1.1". A build straight from source says "dev",
+// -ldflags "-X main.version=v0.1.2". A build straight from source says "dev",
 // which is how you can tell a `go build` apart from a published release.
 var version = "dev"
 
@@ -33,6 +34,7 @@ COMMANDS
   list                   List your domains
   get <label>            Show one domain and its records
   record <label>         Add a DNS record to a domain
+  unrecord <label> <id>  Remove one DNS record, keeping the name
   forward <label> <url>  Forward <label>.<domain> to a URL (claims it if needed)
   unforward <label>      Remove the forward, keeping the name
   proxy <label> <host>   Serve a backend at <label>.<domain> over HTTPS — our cert,
@@ -41,6 +43,7 @@ COMMANDS
   ns <label> <ns>...     Delegate the domain to your own nameservers
   txt <label> <value>    Add a TXT record (e.g. for ACME / SSL challenges)
   delete <label>         Delete a domain and its records
+  account delete         Close your account (--force also deletes names it holds)
   version                Print the CLI version
 
 GLOBAL FLAGS
@@ -78,6 +81,8 @@ func main() {
 		cmdGet(args)
 	case "record":
 		cmdRecord(args)
+	case "unrecord":
+		cmdUnrecord(args)
 	case "forward":
 		cmdForward(args)
 	case "unforward":
@@ -92,6 +97,8 @@ func main() {
 		cmdTXT(args)
 	case "delete":
 		cmdDelete(args)
+	case "account":
+		cmdAccount(args)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s\n", cmd, usage)
 		os.Exit(2)
@@ -160,8 +167,25 @@ func fail(msg string) {
 
 func check(err error) {
 	if err != nil {
-		fail(err.Error())
+		failAPI(err)
 	}
+}
+
+// failAPI ends the program on an API error, adding the one thing the message
+// itself can't say: whether coming back later would help. The API marks an
+// upstream failure retry:true when it is an outage, and retry:false when it is
+// a misconfiguration on our side that no amount of waiting fixes.
+func failAPI(err error) {
+	var api *client.APIError
+	if errors.As(err, &api) {
+		if retry, present := api.Flag("retry"); present {
+			if retry {
+				fail(api.Message + "\n  (temporary — worth retrying in a moment)")
+			}
+			fail(api.Message + "\n  (not retryable — this one is on our side; retrying will not help)")
+		}
+	}
+	fail(err.Error())
 }
 
 // out prints either raw JSON (when --json) or a human line via the formatter.
@@ -213,7 +237,10 @@ func cmdWhoami(args []string) {
 		fmt.Printf("account:        %v\n", m["account_id"])
 		fmt.Printf("state:          %v\n", m["state"])
 		fmt.Printf("email:          %v (verified: %v)\n", orDash(m["email"]), m["email_verified"])
-		fmt.Printf("domains used:   %v / %s\n", m["used"], quotaText(m["quota"]))
+		fmt.Printf("domains used:   %v / %s\n", m["used"], quotaOf(m))
+		if cap, ok := m["max_subdomains"].(float64); ok && cap > 0 {
+			fmt.Printf("per-account cap: %d name(s) at once\n", int(cap))
+		}
 		if d, ok := m["domains"].([]any); ok && len(d) > 0 {
 			fmt.Printf("available:      %v\n", joinAny(d))
 		}
@@ -258,11 +285,29 @@ func cmdClaim(args []string) {
 		body["host"] = *host
 	}
 	var resp map[string]any
-	check(c.Do("POST", "/v1/subdomains", body, &resp))
+	if err := c.Do("POST", "/v1/subdomains", body, &resp); err != nil {
+		// Re-claiming a name you already hold is a 409 like any other, but it is
+		// the one 409 that means "carry on": the name is yours. Saying so and
+		// exiting 0 makes claim safe to run twice, which is how an agent that
+		// lost its place actually behaves.
+		var api *client.APIError
+		if errors.As(err, &api) {
+			if owned, _ := api.Flag("owned"); owned {
+				if g.json {
+					b, _ := json.MarshalIndent(api.Body, "", "  ")
+					fmt.Println(string(b))
+					return
+				}
+				fmt.Printf("✓ You already own %v — nothing to do.\n", api.Body["fqdn"])
+				return
+			}
+		}
+		failAPI(err)
+	}
 	out(g, resp, func(m map[string]any) {
 		fmt.Printf("✓ Registered %v\n", m["fqdn"])
 		if rec, ok := m["record"].(map[string]any); ok && rec != nil {
-			fmt.Printf("  record: %v %v -> %v\n", rec["type"], rec["name"], rec["content"])
+			fmt.Printf("  record: %v %v -> %v  (id %v)\n", rec["type"], rec["name"], rec["content"], rec["id"])
 		}
 		if note, ok := m["note"].(string); ok && note != "" {
 			fmt.Printf("  ✉ %s\n", note)
@@ -322,7 +367,9 @@ func cmdGet(args []string) {
 		recs, _ := m["records"].([]any)
 		for _, r := range recs {
 			rec := r.(map[string]any)
-			fmt.Printf("  %-6v %v -> %v\n", rec["type"], rec["name"], rec["content"])
+			// The id is here because `unrecord` needs it, and this is the only
+			// place a caller can read it off.
+			fmt.Printf("  %-6v %v -> %v  (id %v)\n", rec["type"], rec["name"], rec["content"], rec["id"])
 		}
 	})
 }
@@ -341,7 +388,27 @@ func cmdRecord(args []string) {
 	var resp map[string]any
 	check(c.Do("POST", resourcePath(pos[0], g, "/records"), body, &resp))
 	out(g, resp, func(m map[string]any) {
-		fmt.Printf("✓ %v %v -> %v\n", m["type"], m["name"], m["content"])
+		fmt.Printf("✓ %v %v -> %v  (id %v)\n", m["type"], m["name"], m["content"], m["id"])
+		fmt.Printf("  remove it with: agentdomains unrecord %s %v\n", pos[0], m["id"])
+	})
+}
+
+// cmdUnrecord removes a single record and keeps the name. Before the API had
+// this, undoing one record meant deleting the whole domain and claiming it back
+// — and hoping nobody took it in between.
+func cmdUnrecord(args []string) {
+	fs, g := newFlagSet("unrecord")
+	pos := parse(fs, args)
+	if len(pos) < 2 {
+		fail("usage: agentdomains unrecord <label> <record-id> [--domain makes.fyi]\n" +
+			"  record ids are shown by `agentdomains get <label>`")
+	}
+	c, _ := mustClient(g, true)
+	var resp map[string]any
+	check(c.Do("DELETE", resourcePath(pos[0], g, "/records/"+url.PathEscape(pos[1])), nil, &resp))
+	out(g, resp, func(m map[string]any) {
+		rec, _ := m["deleted"].(map[string]any)
+		fmt.Printf("✓ Removed %v %v -> %v from %v\n", rec["type"], rec["name"], rec["content"], m["fqdn"])
 	})
 }
 
@@ -388,6 +455,7 @@ func cmdForward(args []string) {
 		}
 		kind += ")"
 		fmt.Printf("✓ %v %s %v\n", m["fqdn"], kind, f["target"])
+		printReplaced(m, "forward")
 		fmt.Println("  DNS is live within seconds; HTTPS may take a minute on first use.")
 		if note, ok := m["note"].(string); ok && note != "" {
 			fmt.Printf("  ✉ %s\n", note)
@@ -430,6 +498,7 @@ func cmdProxy(args []string) {
 	out(g, resp, func(m map[string]any) {
 		p, _ := m["proxy"].(map[string]any)
 		fmt.Printf("✓ %v serves %v (reverse proxy, HTTPS at our edge)\n", m["fqdn"], p["origin"])
+		printReplaced(m, "proxy")
 		fmt.Println("  DNS is live within seconds; HTTPS may take a minute on first use.")
 		fmt.Println("  Note: apps that hardcode their own hostname (e.g. OAuth logins) may")
 		fmt.Println("  need that hostname added on their side for every flow to work.")
@@ -496,6 +565,86 @@ func cmdDelete(args []string) {
 	out(g, resp, func(m map[string]any) {
 		fmt.Printf("✓ Deleted %v\n", m["deleted"])
 	})
+}
+
+// cmdAccount handles the one command that ends everything: `account delete`.
+// It is two words on purpose — closing an account is not something to fire off
+// by mistyping a one-word verb.
+func cmdAccount(args []string) {
+	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
+		fail("usage: agentdomains account delete [--force]")
+	}
+	switch args[0] {
+	case "delete", "close":
+		cmdAccountDelete(args[1:])
+	default:
+		fail(fmt.Sprintf("unknown account command %q (only `account delete` exists)", args[0]))
+	}
+}
+
+// cmdAccountDelete closes the account and invalidates its API key. The server
+// refuses while names are still held unless --force is passed, which deletes
+// them too — the refusal exists so an agent tidying up cannot silently take a
+// live hostname down with it.
+func cmdAccountDelete(args []string) {
+	fs, g := newFlagSet("account delete")
+	force := fs.Bool("force", false, "also delete every name the account still holds (they stop resolving immediately)")
+	parse(fs, args)
+	c, cfg := mustClient(g, true)
+
+	path := "/v1/account"
+	if *force {
+		path += "?force=true"
+	}
+	var resp map[string]any
+	if err := c.Do("DELETE", path, nil, &resp); err != nil {
+		var api *client.APIError
+		if errors.As(err, &api) && api.Status == 409 {
+			// The names are listed in the body; repeating the instruction here
+			// saves the caller a second guess about the flag's name.
+			fail(api.Message + "\n  i.e. agentdomains account delete --force")
+		}
+		failAPI(err)
+	}
+	// The key is dead now; leaving it in the config file only produces 401s.
+	cfg.APIKey, cfg.AccountID = "", ""
+	_ = config.Save(cfg)
+	out(g, resp, func(m map[string]any) {
+		fmt.Printf("✓ Account %v deleted (%v name(s) removed). The saved API key was cleared.\n",
+			m["account_id"], m["subdomains_deleted"])
+	})
+}
+
+// printReplaced reports the address records a forward or proxy displaced. The
+// call deletes any A/AAAA/CNAME sitting at the label itself — that is how it
+// takes over the hostname — and a caller who is not told loses records without
+// noticing.
+func printReplaced(m map[string]any, mode string) {
+	replaced, _ := m["replaced_records"].([]any)
+	if len(replaced) == 0 {
+		return
+	}
+	fmt.Printf("  %d record(s) replaced by the %s:\n", len(replaced), mode)
+	for _, r := range replaced {
+		rec, ok := r.(map[string]any)
+		if !ok {
+			continue
+		}
+		fmt.Printf("    %v %v -> %v\n", rec["type"], rec["name"], rec["content"])
+	}
+}
+
+// quotaOf renders the quota line from a whoami body. The server omits `quota`
+// entirely when quotas are off (reporting "quota":0 read as "you may hold zero
+// names"), so its absence — or an unlimited flag — is the unlimited case.
+func quotaOf(m map[string]any) string {
+	if unlimited, ok := m["unlimited"].(bool); ok && unlimited {
+		return "unlimited"
+	}
+	if _, ok := m["quota"]; !ok {
+		return "unlimited"
+	}
+	return quotaText(m["quota"])
 }
 
 // quotaText renders a quota value: "unlimited" when it's 0 or less (quotas
