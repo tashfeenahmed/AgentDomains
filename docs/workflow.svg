@@ -40,7 +40,8 @@
   <rect x="296" y="158" width="168" height="28" rx="8" fill="#EFFCF5"/>
   <text x="308" y="177" class="code">agentdomains claim myapp</text>
   <text x="296" y="216" class="desc">Under makes.fyi or</text>
-  <text x="296" y="236" class="desc">agentdomains.co.</text>
+  <text x="296" y="236" class="desc">agentdomains.co. The</text>
+  <text x="296" y="256" class="desc">first one needs --email.</text>
 
   <!-- 3: point -->
   <rect x="520" y="100" width="200" height="170" rx="16" fill="#FFFFFF" stroke="#ECECEC" stroke-width="2"/>

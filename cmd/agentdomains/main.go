@@ -14,6 +14,11 @@ import (
 	"github.com/tashfeenahmed/AgentDomains/internal/config"
 )
 
+// version is stamped at build time with
+// -ldflags "-X main.version=v0.1.1". A build straight from source says "dev",
+// which is how you can tell a `go build` apart from a published release.
+var version = "dev"
+
 const usage = `agentdomains — free domains for the sites your AI agents build
 
 USAGE
@@ -29,11 +34,14 @@ COMMANDS
   get <label>            Show one domain and its records
   record <label>         Add a DNS record to a domain
   forward <label> <url>  Forward <label>.<domain> to a URL (claims it if needed)
+  unforward <label>      Remove the forward, keeping the name
   proxy <label> <host>   Serve a backend at <label>.<domain> over HTTPS — our cert,
                          your origin, no setup on the origin (claims it if needed)
+  unproxy <label>        Tear the reverse proxy down, keeping the name
   ns <label> <ns>...     Delegate the domain to your own nameservers
   txt <label> <value>    Add a TXT record (e.g. for ACME / SSL challenges)
   delete <label>         Delete a domain and its records
+  version                Print the CLI version
 
 GLOBAL FLAGS
   --json                 Emit raw JSON (ideal for agents/scripts)
@@ -54,6 +62,8 @@ func main() {
 	switch cmd {
 	case "-h", "--help", "help":
 		fmt.Println(usage)
+	case "version", "-v", "--version":
+		fmt.Printf("agentdomains %s\n", version)
 	case "signup":
 		cmdSignup(args)
 	case "whoami":

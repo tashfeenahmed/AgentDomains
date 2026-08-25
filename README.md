@@ -21,19 +21,22 @@
 
 When an AI agent builds a website or an API, it needs a domain to serve it on.
 **AgentDomains** hands one out from a single CLI command (`yourname.makes.fyi` or
-`yourname.agentdomains.co`), and the agent wires it up by itself. No email required
-to start.
+`yourname.agentdomains.co`), and the agent wires it up by itself. Signing up needs
+nothing at all; the first name you register needs an email address, used only for the
+verification link and for notices before a name is reclaimed.
 
 ```bash
 agentdomains signup
-agentdomains claim myapp --type A --content 203.0.113.10
+agentdomains claim myapp --email you@example.com --type A --content 203.0.113.10
 # → myapp.makes.fyi now resolves on the public internet ✨
 ```
 
 ## Why it's built for agents
 
-- **No human in the loop to start.** `signup` issues an API key right away. The account
-  is *provisional* for 30 days; a human validates it later (one email link) to keep it.
+- **Signup asks for nothing.** `signup` issues an API key right away, no email, no form.
+  Registering the account's *first* name takes `--email`, which is where the confirmation
+  link goes; confirm within 30 days or the account and its names are deleted. Later claims
+  on the same account need no email.
 - **Two domains, your pick.** Claim under `makes.fyi` (default) or `agentdomains.co`
   with `--domain`. The same label can live under each independently.
 - **Scriptable by design.** Add `--json` to any command for clean machine output, and
@@ -49,19 +52,26 @@ agentdomains claim myapp --type A --content 203.0.113.10
 # Go toolchain (1.22+):
 go install github.com/tashfeenahmed/AgentDomains/cmd/agentdomains@latest
 
-# …or download a prebuilt binary from Releases and put it on your PATH.
+# …or grab a prebuilt binary for your platform (macOS/Linux/Windows, amd64 + arm64)
+# from the latest release, verify it against SHA256SUMS, and put it on your PATH:
+#   https://github.com/tashfeenahmed/AgentDomains/releases/latest
 ```
+
+The module path is case-sensitive: it is `.../AgentDomains/...`, matching the repository
+name, even though the command and the brand are lowercase.
 
 ## Quickstart
 
 ```bash
 agentdomains signup                                    # instant account + API key
-agentdomains claim myapp --type A --content 203.0.113.10
+agentdomains claim myapp --email you@example.com --type A --content 203.0.113.10
 dig +short myapp.makes.fyi                              # 203.0.113.10 ✨
 
-# claim under the other domain instead:
+# later claims on the same account no longer need --email:
 agentdomains claim myapp --domain agentdomains.co --type A --content 203.0.113.10
 ```
+
+Labels are lowercased when you claim them, so `MyApp` becomes `myapp.makes.fyi`.
 
 ## Commands
 
@@ -70,15 +80,18 @@ agentdomains claim myapp --domain agentdomains.co --type A --content 203.0.113.1
 | `agentdomains signup` | Create an account; saves the API key to `~/.agentdomains/config.json` |
 | `agentdomains whoami` | Show account, quota, usage, and available domains |
 | `agentdomains email <addr>` | Attach an email so a human can validate the account |
-| `agentdomains claim <label>` | Claim `<label>.makes.fyi` (or `--domain agentdomains.co`), optionally with `--type/--content/--host` |
+| `agentdomains claim <label>` | Claim `<label>.makes.fyi` (or `--domain agentdomains.co`); `--email` is required on the account's first claim; optionally `--type/--content/--host` |
 | `agentdomains list` | List your domains |
 | `agentdomains get <label>` | Show one domain and its records |
 | `agentdomains record <label> --type A --content <ip>` | Add a DNS record |
 | `agentdomains forward <label> <url>` | Forward (HTTP redirect) the subdomain to a URL; claims it if needed |
 | `agentdomains unforward <label>` | Remove a forward (keeps the label) |
+| `agentdomains proxy <label> <host>` | Serve a backend at the subdomain over HTTPS on our certificate; claims it if needed |
+| `agentdomains unproxy <label>` | Tear the reverse proxy down (keeps the label) |
 | `agentdomains ns <label> <ns1> <ns2>` | Delegate the domain to your own nameservers |
 | `agentdomains txt <label> <value> [--host _acme-challenge]` | Add a TXT record (for SSL) |
 | `agentdomains delete <label>` | Delete a domain and its records |
+| `agentdomains version` | Print the CLI version |
 
 **Global flags:** `--json` (machine output), `--api-url` (override endpoint),
 `--domain` (which domain to act under). **Env:** `AGENTDOMAINS_API_KEY`,
@@ -88,7 +101,7 @@ agentdomains claim myapp --domain agentdomains.co --type A --content 203.0.113.1
 
 ```bash
 agentdomains signup
-agentdomains claim my-bot --type A --content "$(curl -s ifconfig.me)"
+agentdomains claim my-bot --email you@example.com --type A --content "$(curl -s ifconfig.me)"
 # run a server on :80, then get a cert over HTTP-01:
 certbot certonly --standalone -d my-bot.makes.fyi
 ```
