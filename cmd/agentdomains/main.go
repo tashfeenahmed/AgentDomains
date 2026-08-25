@@ -9,16 +9,32 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"github.com/tashfeenahmed/AgentDomains/internal/client"
 	"github.com/tashfeenahmed/AgentDomains/internal/config"
 )
 
-// version is stamped at build time with
-// -ldflags "-X main.version=v0.1.2". A build straight from source says "dev",
-// which is how you can tell a `go build` apart from a published release.
-var version = "dev"
+// version is stamped at build time with -ldflags "-X main.version=v0.1.2",
+// which is how the released archives know their own tag.
+var version = ""
+
+// cliVersion is what `agentdomains version` prints. `go install <module>@latest`
+// applies no ldflags, so a binary installed that way used to call itself "dev"
+// while being a perfectly good release; Go records the module version it was
+// built from, and reading it back is more truthful than the fallback.
+func cliVersion() string {
+	if version != "" {
+		return version
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		if v := bi.Main.Version; v != "" && v != "(devel)" {
+			return v
+		}
+	}
+	return "dev"
+}
 
 const usage = `agentdomains — free domains for the sites your AI agents build
 
@@ -66,7 +82,7 @@ func main() {
 	case "-h", "--help", "help":
 		fmt.Println(usage)
 	case "version", "-v", "--version":
-		fmt.Printf("agentdomains %s\n", version)
+		fmt.Printf("agentdomains %s\n", cliVersion())
 	case "signup":
 		cmdSignup(args)
 	case "whoami":
