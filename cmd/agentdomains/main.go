@@ -173,7 +173,9 @@ func mustClient(g *globals, needKey bool) (*client.Client, config.Config) {
 	if needKey && cfg.APIKey == "" {
 		fail("no API key found — run `agentdomains signup` first (or set AGENTDOMAINS_API_KEY)")
 	}
-	return client.New(cfg.APIURL, cfg.APIKey), cfg
+	// cliVersion also names the client in the User-Agent, so `agentdomains
+	// version` and what the API sees can never disagree.
+	return client.New(cfg.APIURL, cfg.APIKey, cliVersion()), cfg
 }
 
 func fail(msg string) {

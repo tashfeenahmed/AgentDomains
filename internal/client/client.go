@@ -11,17 +11,32 @@ import (
 	"time"
 )
 
+// product is the name half of the User-Agent. The API groups its callers by the
+// token before the first "/", so this string is how a request from the CLI is
+// told apart from one from the MCP server (agentdomains-mcp) or from a script
+// hitting the API directly.
+const product = "agentdomains-cli"
+
 type Client struct {
-	baseURL string
-	apiKey  string
-	http    *http.Client
+	baseURL   string
+	apiKey    string
+	userAgent string
+	http      *http.Client
 }
 
-func New(baseURL, apiKey string) *Client {
+// New builds a client for baseURL. version is what `agentdomains version`
+// reports — the release tag for a published build, "dev" for one built straight
+// from source — and goes out as the User-Agent on every request; without it Go
+// sends its own default, which says nothing about who is calling.
+func New(baseURL, apiKey, version string) *Client {
+	if version == "" {
+		version = "dev"
+	}
 	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		apiKey:  apiKey,
-		http:    &http.Client{Timeout: 20 * time.Second},
+		baseURL:   strings.TrimRight(baseURL, "/"),
+		apiKey:    apiKey,
+		userAgent: product + "/" + version,
+		http:      &http.Client{Timeout: 20 * time.Second},
 	}
 }
 
@@ -63,6 +78,7 @@ func (c *Client) Do(method, path string, body any, out any) error {
 		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", c.userAgent)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
