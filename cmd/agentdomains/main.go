@@ -330,6 +330,10 @@ func cmdClaim(args []string) {
 		if note, ok := m["note"].(string); ok && note != "" {
 			fmt.Printf("  ✉ %s\n", note)
 		}
+		// Printed on the one command that proves the thing works: a name is
+		// registered and nobody has been asked for a card. out() has already
+		// returned by the --json path, so machine output stays clean.
+		fmt.Println("  Free, no card. How it compares: https://agentdomains.co/compare")
 	})
 }
 
