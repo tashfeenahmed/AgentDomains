@@ -31,6 +31,9 @@ agentdomains claim myapp --email you@example.com --type A --content 203.0.113.10
 # → myapp.makes.fyi now resolves on the public internet ✨
 ```
 
+**Price:** $0, no card, no tiers — see [agentdomains.co/pricing](https://agentdomains.co/pricing).
+Against the alternatives: [agentdomains.co/compare](https://agentdomains.co/compare).
+
 ## Why it's built for agents
 
 - **Signup asks for nothing.** `signup` issues an API key right away, no email, no form.
@@ -72,6 +75,51 @@ agentdomains claim myapp --domain agentdomains.co --type A --content 203.0.113.1
 ```
 
 Labels are lowercased when you claim them, so `MyApp` becomes `myapp.makes.fyi`.
+
+## MCP
+
+Everything below is also available over the [Model Context Protocol](https://modelcontextprotocol.io),
+so an agent can register and manage names as typed tool calls instead of shelling out.
+Seventeen tools, the same on either transport.
+
+**Hosted** — Streamable HTTP at `https://mcp.agentdomains.co`, nothing to install:
+
+```bash
+claude mcp add --transport http agentdomains https://mcp.agentdomains.co \
+  --header "Authorization: Bearer adom_…"
+```
+
+```json
+{
+  "mcpServers": {
+    "agentdomains": {
+      "type": "http",
+      "url": "https://mcp.agentdomains.co",
+      "headers": { "Authorization": "Bearer adom_…" }
+    }
+  }
+}
+```
+
+**Local (stdio)** — `npx` fetches the server on demand:
+
+```json
+{
+  "mcpServers": {
+    "agentdomains": {
+      "command": "npx",
+      "args": ["-y", "agentdomains-mcp"],
+      "env": { "AGENTDOMAINS_API_KEY": "adom_…" }
+    }
+  }
+}
+```
+
+Same API key as the CLI (`~/.agentdomains/config.json`) — the stdio server reads it from
+there, so the `env` block is only needed if you have not run `agentdomains signup`.
+
+Full tool list and per-client setup: [docs.agentdomains.co/#mcp](https://docs.agentdomains.co/#mcp).
+Source: [tashfeenahmed/AgentDomains-mcp](https://github.com/tashfeenahmed/AgentDomains-mcp).
 
 ## Commands
 
