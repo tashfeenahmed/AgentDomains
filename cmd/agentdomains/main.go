@@ -194,19 +194,37 @@ func check(err error) {
 // upstream failure retry:true when it is an outage, and retry:false when it is
 // a misconfiguration on our side that no amount of waiting fixes.
 func failAPI(err error) {
+	failAPIWith(err, "")
+}
+
+// failAPIWith is failAPI for commands that look a name up: notFound is the
+// hint to attach when the API answers 404 for the name itself (see
+// nameNotFoundHint). Commands that don't look up a name pass "".
+func failAPIWith(err error, notFound string) {
 	var api *client.APIError
 	if errors.As(err, &api) {
-		if hint := apiHint(api); hint != "" {
+		if hint := apiHint(api, notFound); hint != "" {
 			fail(api.Message + "\n  " + hint)
 		}
 	}
 	fail(err.Error())
 }
 
-// apiHint turns the statuses an agent hits most into the next command to run.
+// checkName is check for the commands that address a name by label (get,
+// delete): a 404 there means the name wasn't found, so it gets the hint.
+func checkName(err error, g *globals) {
+	if err != nil {
+		failAPIWith(err, nameNotFoundHint(g.domain))
+	}
+}
+
+// apiHint turns the statuses an agent hits most into the next thing to do.
 // A bare "request failed (401)" sends an agent retrying the same call forever;
-// the hint names the recovery instead. Keep this pure — main_test.go pins it.
-func apiHint(api *client.APIError) string {
+// the hint names the recovery instead. notFound is attached to a 404 only when
+// the caller looked up a name; a 404 from a record/forward/proxy lookup or an
+// unknown endpoint says nothing about the name, so it gets no hint. Keep this
+// pure — main_test.go pins it.
+func apiHint(api *client.APIError, notFound string) string {
 	if retry, present := api.Flag("retry"); present {
 		if retry {
 			return "(temporary — worth retrying in a moment)"
@@ -215,17 +233,40 @@ func apiHint(api *client.APIError) string {
 	}
 	switch api.Status {
 	case 401:
-		return "the saved API key was rejected — run `agentdomains signup` for a new one, or set AGENTDOMAINS_API_KEY"
+		// Not "run signup": a new account doesn't own the names the old key held.
+		return "the API key was rejected — check AGENTDOMAINS_API_KEY (or ~/.agentdomains/config.json).\n" +
+			"  Lost the key? If the account has a verified email, POST {\"email\": \"...\"} to\n" +
+			"  https://api.agentdomains.co/v1/account/key/recover for a reset link. Signing up again would not own your names."
 	case 404:
-		return "no such name under this domain — `agentdomains list` shows what you hold; try --domain agentdomains.co"
+		if notFound != "" && !strings.HasPrefix(api.Message, "no such endpoint") {
+			return notFound
+		}
 	case 429:
 		if secs, ok := api.Body["retry_after"].(float64); ok && secs > 0 {
 			return fmt.Sprintf("rate limited — retry in about %d second(s)", int(secs))
 		}
 		return "rate limited — wait a minute before retrying"
 	}
-	if msg, _ := api.Flag("owned"); msg {
-		return "you already own this name"
+	return ""
+}
+
+// nameNotFoundHint is the 404 hint for a name lookup. Without --domain the
+// server already searched every domain, so there is nowhere else to point;
+// with --domain, the name may live under the other one.
+func nameNotFoundHint(domain string) string {
+	h := "`agentdomains list` shows the names you hold"
+	if other := otherDomain(domain); other != "" {
+		h += fmt.Sprintf(" — or it may be under --domain %s", other)
+	}
+	return h
+}
+
+func otherDomain(domain string) string {
+	switch strings.ToLower(strings.TrimSpace(domain)) {
+	case "makes.fyi":
+		return "agentdomains.co"
+	case "agentdomains.co":
+		return "makes.fyi"
 	}
 	return ""
 }
@@ -397,7 +438,7 @@ func cmdGet(args []string) {
 	}
 	c, _ := mustClient(g, true)
 	var resp map[string]any
-	check(c.Do("GET", resourcePath(pos[0], g, ""), nil, &resp))
+	checkName(c.Do("GET", resourcePath(pos[0], g, ""), nil, &resp), g)
 	out(g, resp, func(m map[string]any) {
 		fmt.Printf("%v (delegated=%v)\n", m["fqdn"], m["delegated"])
 		if f, ok := m["forward"].(map[string]any); ok && f != nil {
@@ -607,7 +648,7 @@ func cmdDelete(args []string) {
 	}
 	c, _ := mustClient(g, true)
 	var resp map[string]any
-	check(c.Do("DELETE", resourcePath(pos[0], g, ""), nil, &resp))
+	checkName(c.Do("DELETE", resourcePath(pos[0], g, ""), nil, &resp), g)
 	out(g, resp, func(m map[string]any) {
 		fmt.Printf("✓ Deleted %v\n", m["deleted"])
 	})
