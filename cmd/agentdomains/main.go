@@ -45,6 +45,7 @@ COMMANDS
   signup                 Create an account and save the API key locally
   whoami                 Show your account, quota, usage, and available domains
   email <address>        Attach an email so a human can validate the account
+  recover-key <email>    Ask for an API-key reset link by email (no key needed)
   claim <label>          Register <label>.<domain> (needs --email the first time;
                          confirm within 30 days or it's deleted)
   list                   List your domains
@@ -89,6 +90,8 @@ func main() {
 		cmdWhoami(args)
 	case "email":
 		cmdEmail(args)
+	case "recover-key":
+		cmdRecoverKey(args)
 	case "claim":
 		cmdClaim(args)
 	case "list":
@@ -235,8 +238,8 @@ func apiHint(api *client.APIError, notFound string) string {
 	case 401:
 		// Not "run signup": a new account doesn't own the names the old key held.
 		return "the API key was rejected — check AGENTDOMAINS_API_KEY (or ~/.agentdomains/config.json).\n" +
-			"  Lost the key? If the account has a verified email, POST {\"email\": \"...\"} to\n" +
-			"  https://api.agentdomains.co/v1/account/key/recover for a reset link. Signing up again would not own your names."
+			"  Lost the key? agentdomains recover-key <verified email> sends a reset link.\n" +
+			"  Signing up again would not own your names."
 	case 404:
 		if notFound != "" && !strings.HasPrefix(api.Message, "no such endpoint") {
 			return notFound
@@ -341,6 +344,32 @@ func cmdEmail(args []string) {
 	check(c.Do("POST", "/v1/account/email", map[string]any{"email": pos[0]}, &resp))
 	out(g, resp, func(m map[string]any) {
 		fmt.Printf("✓ Verification link sent to %v. A human must click it within 30 days.\n", m["sent_to"])
+	})
+}
+
+// cmdRecoverKey asks the API for a key-reset link for the account whose
+// verified email is <email>. It deliberately needs NO API key — that is the
+// whole point: this is the command you run after you have lost the key. The
+// email carries a link; opening and confirming it (a human click) rotates the
+// key, so this command can only ever start the process, never finish it.
+func cmdRecoverKey(args []string) {
+	fs, g := newFlagSet("recover-key")
+	pos := parse(fs, args)
+	if len(pos) < 1 {
+		fail("usage: agentdomains recover-key <email>\n  the verified email on the account; no API key is needed")
+	}
+	c, _ := mustClient(g, false)
+	var resp map[string]any
+	check(c.Do("POST", "/v1/account/key/recover", map[string]any{"email": pos[0]}, &resp))
+	out(g, resp, func(m map[string]any) {
+		note, _ := m["note"].(string)
+		if note == "" {
+			note = "If a verified account uses that email, a one-time reset link is on its way."
+		}
+		fmt.Printf("✓ %s\n", note)
+		fmt.Println("  Open the link and confirm to get the new key (a human click is required).")
+		fmt.Println("  Then point the CLI at it: export AGENTDOMAINS_API_KEY=<new key>")
+		fmt.Println("  and verify with: agentdomains whoami")
 	})
 }
 

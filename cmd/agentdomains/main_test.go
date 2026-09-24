@@ -24,7 +24,7 @@ func TestAPIHint(t *testing.T) {
 		{
 			name:       "401 points at the key and recovery, not signup",
 			api:        &client.APIError{Status: 401, Message: "invalid key", Body: map[string]any{}},
-			wantSubstr: []string{"AGENTDOMAINS_API_KEY", "/v1/account/key/recover"},
+			wantSubstr: []string{"AGENTDOMAINS_API_KEY", "agentdomains recover-key"},
 			notSubstr:  []string{"run `agentdomains signup`"},
 		},
 		{
