@@ -196,14 +196,38 @@ func check(err error) {
 func failAPI(err error) {
 	var api *client.APIError
 	if errors.As(err, &api) {
-		if retry, present := api.Flag("retry"); present {
-			if retry {
-				fail(api.Message + "\n  (temporary — worth retrying in a moment)")
-			}
-			fail(api.Message + "\n  (not retryable — this one is on our side; retrying will not help)")
+		if hint := apiHint(api); hint != "" {
+			fail(api.Message + "\n  " + hint)
 		}
 	}
 	fail(err.Error())
+}
+
+// apiHint turns the statuses an agent hits most into the next command to run.
+// A bare "request failed (401)" sends an agent retrying the same call forever;
+// the hint names the recovery instead. Keep this pure — main_test.go pins it.
+func apiHint(api *client.APIError) string {
+	if retry, present := api.Flag("retry"); present {
+		if retry {
+			return "(temporary — worth retrying in a moment)"
+		}
+		return "(not retryable — this one is on our side; retrying will not help)"
+	}
+	switch api.Status {
+	case 401:
+		return "the saved API key was rejected — run `agentdomains signup` for a new one, or set AGENTDOMAINS_API_KEY"
+	case 404:
+		return "no such name under this domain — `agentdomains list` shows what you hold; try --domain agentdomains.co"
+	case 429:
+		if secs, ok := api.Body["retry_after"].(float64); ok && secs > 0 {
+			return fmt.Sprintf("rate limited — retry in about %d second(s)", int(secs))
+		}
+		return "rate limited — wait a minute before retrying"
+	}
+	if msg, _ := api.Flag("owned"); msg {
+		return "you already own this name"
+	}
+	return ""
 }
 
 // out prints either raw JSON (when --json) or a human line via the formatter.
