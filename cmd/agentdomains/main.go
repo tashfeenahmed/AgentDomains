@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"runtime/debug"
@@ -358,19 +359,27 @@ func cmdRecoverKey(args []string) {
 	if len(pos) < 1 {
 		fail("usage: agentdomains recover-key <email>\n  the verified email on the account; no API key is needed")
 	}
-	c, _ := mustClient(g, false)
+	_, cfg := mustClient(g, false)
+	// Send no key, even if one is configured: the endpoint takes none, and the
+	// configured key is typically the stale one that got us here.
+	c := client.New(cfg.APIURL, "", cliVersion())
 	var resp map[string]any
 	check(c.Do("POST", "/v1/account/key/recover", map[string]any{"email": pos[0]}, &resp))
-	out(g, resp, func(m map[string]any) {
-		note, _ := m["note"].(string)
-		if note == "" {
-			note = "If a verified account uses that email, a one-time reset link is on its way."
-		}
-		fmt.Printf("✓ %s\n", note)
-		fmt.Println("  Open the link and confirm to get the new key (a human click is required).")
-		fmt.Println("  Then point the CLI at it: export AGENTDOMAINS_API_KEY=<new key>")
-		fmt.Println("  and verify with: agentdomains whoami")
-	})
+	out(g, resp, func(m map[string]any) { printRecoverKey(os.Stdout, m) })
+}
+
+// printRecoverKey renders the recover-key answer. The server's note already
+// says to open the link and confirm, so it is shown as-is rather than repeated;
+// the fallback only covers a server that sends no note.
+func printRecoverKey(w io.Writer, m map[string]any) {
+	note, _ := m["note"].(string)
+	if note == "" {
+		note = "If a verified account uses that email, a one-time reset link is on its way. " +
+			"Open it and confirm to get a new API key (a human click is required)."
+	}
+	fmt.Fprintf(w, "✓ %s\n", note)
+	fmt.Fprintln(w, "  Then point the CLI at the new key: export AGENTDOMAINS_API_KEY=<new key>")
+	fmt.Fprintln(w, "  and verify with: agentdomains whoami")
 }
 
 func cmdClaim(args []string) {
