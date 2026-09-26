@@ -46,6 +46,8 @@ COMMANDS
   signup                 Create an account and save the API key locally
   whoami                 Show your account, quota, usage, and available domains
   email <address>        Attach an email so a human can validate the account
+  check <label>...       Is a name free? Ask before you claim (no key needed;
+                         several labels at once is fine)
   recover-key <email>    Ask for an API-key reset link by email (no key needed)
   claim <label>          Register <label>.<domain> (needs --email the first time;
                          confirm within 30 days or it's deleted)
@@ -91,6 +93,8 @@ func main() {
 		cmdWhoami(args)
 	case "email":
 		cmdEmail(args)
+	case "check":
+		cmdCheck(args)
 	case "recover-key":
 		cmdRecoverKey(args)
 	case "claim":
@@ -346,6 +350,79 @@ func cmdEmail(args []string) {
 	out(g, resp, func(m map[string]any) {
 		fmt.Printf("✓ Verification link sent to %v. A human must click it within 30 days.\n", m["sent_to"])
 	})
+}
+
+// cmdCheck asks the public availability endpoint whether one or more labels
+// are free. Like recover-key it needs NO API key — deciding to claim a name
+// should not require having an account first, and an agent choosing between
+// candidate names should not have to claim-and-see. The server answers
+// invalid labels as available:false with reason "invalid", so a bad name is a
+// result here, not an error.
+func cmdCheck(args []string) {
+	fs, g := newFlagSet("check")
+	pos := parse(fs, args)
+	if len(pos) < 1 {
+		fail("usage: agentdomains check <label> [label...] [--domain makes.fyi]\n  asks whether each name is free; no API key needed")
+	}
+	_, cfg := mustClient(g, false)
+	c := client.New(cfg.APIURL, "", cliVersion())
+
+	results := make([]checkVerdict, 0, len(pos))
+	for _, label := range pos {
+		q := "/v1/available?label=" + url.QueryEscape(label)
+		if g.domain != "" {
+			q += "&domain=" + url.QueryEscape(g.domain)
+		}
+		var resp map[string]any
+		// A 400 here means an unknown --domain, which is our mistake, not the
+		// label's; let failAPI explain it the way every other command does.
+		check(c.Do("GET", q, nil, &resp))
+		v := checkVerdict{Label: label}
+		v.Fqdn, _ = resp["fqdn"].(string)
+		v.Available, _ = resp["available"].(bool)
+		v.Reason, _ = resp["reason"].(string)
+		v.Detail, _ = resp["detail"].(string)
+		results = append(results, v)
+	}
+
+	if g.json {
+		b, _ := json.MarshalIndent(results, "", "  ")
+		fmt.Println(string(b))
+		return
+	}
+	printCheckResults(os.Stdout, results)
+}
+
+// checkVerdict is one availability answer, shaped for output: the server's
+// fields, narrowed to what a caller of `check` reads.
+type checkVerdict struct {
+	Label     string `json:"label"`
+	Fqdn      string `json:"fqdn"`
+	Available bool   `json:"available"`
+	Reason    string `json:"reason,omitempty"`
+	Detail    string `json:"detail,omitempty"`
+}
+
+// printCheckResults renders the human view. `check` exists so an agent can
+// compare candidate names in one call, so every verdict prints, and the
+// all-taken case says what to do next instead of ending on a wall of "taken".
+func printCheckResults(w io.Writer, results []checkVerdict) {
+	anyFree := false
+	for _, v := range results {
+		if v.Available {
+			anyFree = true
+			fmt.Fprintf(w, "free     %v\n", v.Fqdn)
+			continue
+		}
+		if v.Reason == "invalid" {
+			fmt.Fprintf(w, "invalid  %v  (%v)\n", v.Fqdn, v.Detail)
+			continue
+		}
+		fmt.Fprintf(w, "taken    %v\n", v.Fqdn)
+	}
+	if !anyFree {
+		fmt.Fprintln(w, "\nnone of those are free — try another name, --domain for the other zone, or `agentdomains list` to see what you hold")
+	}
 }
 
 // cmdRecoverKey asks the API for a key-reset link for the account whose

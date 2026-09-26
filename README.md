@@ -142,6 +142,7 @@ Source: [tashfeenahmed/AgentDomains-mcp](https://github.com/tashfeenahmed/AgentD
 | `agentdomains delete <label>` | Delete a domain and its records |
 | `agentdomains account delete [--force]` | Close the account and invalidate its key; `--force` also deletes the names it holds |
 | `agentdomains recover-key <email>` | Lost your API key? Emails a one-time reset link for the account with that verified email (no key needed to run it) |
+| `agentdomains check <label>...` | Is a name free? Asks the public availability endpoint; several labels at once, no key needed |
 | `agentdomains version` | Print the CLI version |
 
 **Global flags:** `--json` (machine output), `--api-url` (override endpoint),
