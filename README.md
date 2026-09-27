@@ -31,7 +31,8 @@ agentdomains claim myapp --email you@example.com --type A --content 203.0.113.10
 # → myapp.makes.fyi now resolves on the public internet ✨
 ```
 
-**Price:** $0, no card, no tiers — see [agentdomains.co/pricing](https://agentdomains.co/pricing).
+**Price:** free for up to 10 names, no card. Need more? Pro is $5/month for 100 names
+(`agentdomains upgrade`). See [agentdomains.co/pricing](https://agentdomains.co/pricing).
 Against the alternatives: [agentdomains.co/compare](https://agentdomains.co/compare).
 
 ## Why it's built for agents
@@ -205,8 +206,21 @@ account is gone. Re-claiming a name you already hold is not an error: it prints
 
 ## How many names
 
-Per-account quotas are currently **off** — `whoami` says `unlimited` — but one account
-may hold at most **10** names at a time. Delete one you no longer use to free a slot.
+A free account may hold at most **10** names at a time. Delete one you no longer use to
+free a slot, or upgrade:
+
+```bash
+agentdomains upgrade            # prints a Stripe checkout link ($5/month); opens it on a terminal
+agentdomains upgrade --yearly   # $48/year
+agentdomains billing            # card, invoices, switch interval, cancel
+```
+
+**Pro** raises the limit to **100** names, keeps your names even when their origin has
+been unreachable for weeks (free names that stay dark for 45 days are released), and gets
+priority email support. Everything else (records, forwards, proxies, NS delegation) is the
+same on both plans. Cancelling never deletes a name: you keep what you hold and just can't
+add past the free limit. `whoami` shows your plan.
+
 Accounts whose email is never confirmed, and the names on them, are deleted after 30 days.
 
 ## Using it from Claude / agents
