@@ -62,6 +62,9 @@ COMMANDS
   txt <label> <value>    Add a TXT record (e.g. for ACME / SSL challenges)
   delete <label>         Delete a domain and its records
   account delete         Close your account (--force also deletes names it holds)
+  upgrade                Get AgentDomains Pro: 100 names, never released for being
+                         unreachable, priority support ($5/month; --yearly for $48/year)
+  billing                Manage Pro: card, invoices, switch monthly/yearly, cancel
   version                Print the CLI version
 
 GLOBAL FLAGS
@@ -119,6 +122,10 @@ func main() {
 		cmdDelete(args)
 	case "account":
 		cmdAccount(args)
+	case "upgrade":
+		cmdUpgrade(args)
+	case "billing":
+		cmdBilling(args)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s\n", cmd, usage)
 		os.Exit(2)
@@ -323,6 +330,9 @@ func cmdWhoami(args []string) {
 	out(g, resp, func(m map[string]any) {
 		fmt.Printf("account:        %v\n", m["account_id"])
 		fmt.Printf("state:          %v\n", m["state"])
+		if plan, ok := m["plan"].(string); ok && plan != "" {
+			fmt.Printf("plan:           %s\n", plan)
+		}
 		fmt.Printf("email:          %v (verified: %v)\n", orDash(m["email"]), m["email_verified"])
 		fmt.Printf("domains used:   %v / %s\n", m["used"], quotaOf(m))
 		if cap, ok := m["max_subdomains"].(float64); ok && cap > 0 {
@@ -330,6 +340,12 @@ func cmdWhoami(args []string) {
 		}
 		if d, ok := m["domains"].([]any); ok && len(d) > 0 {
 			fmt.Printf("available:      %v\n", joinAny(d))
+		}
+		if s, ok := m["support"].(string); ok && s != "" {
+			fmt.Printf("support:        %s\n", s)
+		}
+		if u, ok := m["upgrade"].(string); ok && u != "" {
+			fmt.Printf("\n  Need more names? %s  (Pro: 100 names, $5/month)\n", u)
 		}
 	})
 }
