@@ -12,6 +12,7 @@ import (
 	"os"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/tashfeenahmed/AgentDomains/internal/client"
 	"github.com/tashfeenahmed/AgentDomains/internal/config"
@@ -46,6 +47,8 @@ COMMANDS
   signup                 Create an account and save the API key locally
   whoami                 Show your account, quota, usage, and available domains
   email <address>        Attach an email so a human can validate the account
+  check <label>...       Is a name free? Ask before you claim (no key needed;
+                         several labels at once is fine)
   recover-key <email>    Ask for an API-key reset link by email (no key needed)
   claim <label>          Register <label>.<domain> (needs --email the first time;
                          confirm within 30 days or it's deleted)
@@ -94,6 +97,8 @@ func main() {
 		cmdWhoami(args)
 	case "email":
 		cmdEmail(args)
+	case "check":
+		cmdCheck(args)
 	case "recover-key":
 		cmdRecoverKey(args)
 	case "claim":
@@ -362,6 +367,140 @@ func cmdEmail(args []string) {
 	out(g, resp, func(m map[string]any) {
 		fmt.Printf("✓ Verification link sent to %v. A human must click it within 30 days.\n", m["sent_to"])
 	})
+}
+
+// cmdCheck asks the public availability endpoint whether one or more labels
+// are free. Like recover-key it needs NO API key — deciding to claim a name
+// should not require having an account first, and an agent choosing between
+// candidate names should not have to claim-and-see. The server answers
+// invalid labels as available:false with reason "invalid", so a bad name is a
+// result here, not an error.
+func cmdCheck(args []string) {
+	fs, g := newFlagSet("check")
+	pos := parse(fs, args)
+	if len(pos) < 1 {
+		fail("usage: agentdomains check <label> [label...] [--domain makes.fyi]\n  asks whether each name is free; no API key needed")
+	}
+	// Availability is public: build a client with no key at all, even when one
+	// is configured, so deciding whether a name is free never depends on (or
+	// leaks) an account.
+	cfg := config.Load()
+	if g.apiURL != "" {
+		cfg.APIURL = g.apiURL
+	}
+	c := client.New(cfg.APIURL, "", cliVersion())
+
+	results, err := runCheck(c, pos, g.domain, checkSleep)
+	// Whatever was fetched before a failure still prints: an agent comparing
+	// ten names that hits the rate limit on the eighth should keep the seven
+	// answers it already has, and --json stays a valid array of them.
+	if g.json {
+		b, _ := json.MarshalIndent(results, "", "  ")
+		fmt.Println(string(b))
+	} else if len(results) > 0 {
+		printCheckResults(os.Stdout, results, err == nil)
+	}
+	if err != nil {
+		if len(results) < len(pos) {
+			fmt.Fprintf(os.Stderr, "stopped after %d of %d names\n", len(results), len(pos))
+		}
+		// A 400 here means an unknown --domain, which is our mistake, not the
+		// label's; let failAPI explain it the way every other command does.
+		failAPI(err)
+	}
+}
+
+// checkSleep is time.Sleep, swapped out by tests.
+var checkSleep = time.Sleep
+
+// maxCheckRetryWait bounds how long check waits on a 429 before giving up.
+// The lookup limiter asks for a few seconds at most; a longer ask means
+// something else is wrong and the caller is better told than kept waiting.
+const maxCheckRetryWait = 30 * time.Second
+
+// runCheck asks /v1/available about each label in order. A 429 that says how
+// long to wait (retry_after in the body, as the API sends it) is waited out
+// once per label and the same label retried; any other error, or a second
+// 429, stops the run and returns the verdicts gathered so far with the error.
+func runCheck(c *client.Client, labels []string, domain string, sleep func(time.Duration)) ([]checkVerdict, error) {
+	results := make([]checkVerdict, 0, len(labels))
+	for _, label := range labels {
+		q := "/v1/available?label=" + url.QueryEscape(label)
+		if domain != "" {
+			q += "&domain=" + url.QueryEscape(domain)
+		}
+		var resp map[string]any
+		err := c.Do("GET", q, nil, &resp)
+		if wait, ok := checkRetryAfter(err); ok {
+			sleep(wait)
+			resp = nil
+			err = c.Do("GET", q, nil, &resp)
+		}
+		if err != nil {
+			return results, err
+		}
+		v := checkVerdict{Label: label}
+		v.Fqdn, _ = resp["fqdn"].(string)
+		v.Available, _ = resp["available"].(bool)
+		v.Reason, _ = resp["reason"].(string)
+		v.Detail, _ = resp["detail"].(string)
+		results = append(results, v)
+	}
+	return results, nil
+}
+
+// checkRetryAfter reports whether err is a rate-limit refusal worth waiting
+// out, and for how long. The API puts retry_after (whole seconds) in the 429
+// body alongside the Retry-After header; the body is what the client keeps.
+func checkRetryAfter(err error) (time.Duration, bool) {
+	var api *client.APIError
+	if !errors.As(err, &api) || api.Status != 429 {
+		return 0, false
+	}
+	secs, _ := api.Body["retry_after"].(float64)
+	if secs <= 0 {
+		secs = 1
+	}
+	wait := time.Duration(secs * float64(time.Second))
+	if wait > maxCheckRetryWait {
+		return 0, false
+	}
+	return wait, true
+}
+
+// checkVerdict is one availability answer, shaped for output: the server's
+// fields, narrowed to what a caller of `check` reads.
+type checkVerdict struct {
+	Label     string `json:"label"`
+	Fqdn      string `json:"fqdn"`
+	Available bool   `json:"available"`
+	Reason    string `json:"reason,omitempty"`
+	Detail    string `json:"detail,omitempty"`
+}
+
+// printCheckResults renders the human view. `check` exists so an agent can
+// compare candidate names in one call, so every verdict prints, and the
+// all-taken case says what to do next instead of ending on a wall of "taken".
+//
+// complete is false when the run stopped early; the nudge is then held back,
+// because the names that were never asked about may well be free.
+func printCheckResults(w io.Writer, results []checkVerdict, complete bool) {
+	anyFree := false
+	for _, v := range results {
+		if v.Available {
+			anyFree = true
+			fmt.Fprintf(w, "free     %v\n", v.Fqdn)
+			continue
+		}
+		if v.Reason == "invalid" {
+			fmt.Fprintf(w, "invalid  %v  (%v)\n", v.Fqdn, v.Detail)
+			continue
+		}
+		fmt.Fprintf(w, "taken    %v\n", v.Fqdn)
+	}
+	if !anyFree && complete {
+		fmt.Fprintln(w, "\nnone of those are free — try another name, --domain for the other zone, or `agentdomains list` to see what you hold")
+	}
 }
 
 // cmdRecoverKey asks the API for a key-reset link for the account whose
