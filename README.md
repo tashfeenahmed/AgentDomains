@@ -77,6 +77,11 @@ agentdomains claim myapp --domain agentdomains.co --type A --content 203.0.113.1
 
 Labels are lowercased when you claim them, so `MyApp` becomes `myapp.makes.fyi`.
 
+Pass `--type/--content` whenever you already know where the name should point:
+a claim without a record (and without a later `record`/`forward`/`proxy`) is a
+name that answers nothing — the API marks it `"serving": false` and prints a
+`next_step`, and `list`/`get` keep flagging it until you fix it.
+
 ## MCP
 
 Everything below is also available over the [Model Context Protocol](https://modelcontextprotocol.io),

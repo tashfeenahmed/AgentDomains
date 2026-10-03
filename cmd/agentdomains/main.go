@@ -51,7 +51,9 @@ COMMANDS
                          several labels at once is fine)
   recover-key <email>    Ask for an API-key reset link by email (no key needed)
   claim <label>          Register <label>.<domain> (needs --email the first time;
-                         confirm within 30 days or it's deleted)
+                         confirm within 30 days or it's deleted). Add
+                         --type/--content to point it at something right away —
+                         a claimed name with no record serves nothing.
   list                   List your domains
   get <label>            Show one domain and its records
   record <label>         Add a DNS record to a domain
@@ -585,6 +587,14 @@ func cmdClaim(args []string) {
 		if rec, ok := m["record"].(map[string]any); ok && rec != nil {
 			fmt.Printf("  record: %v %v -> %v  (id %v)\n", rec["type"], rec["name"], rec["content"], rec["id"])
 		}
+		// The name exists but nothing points at it yet: no DNS answer, no
+		// request served. Say so here — this is the last output the agent
+		// reads before moving on, and every claim that stopped here became
+		// one of the recordless names in the owner's stats (board card #613).
+		// --json keeps both fields in the payload; this is the human view.
+		if line := claimNudge(m); line != "" {
+			fmt.Printf("  ! %s\n", line)
+		}
 		if note, ok := m["note"].(string); ok && note != "" {
 			fmt.Printf("  ✉ %s\n", note)
 		}
@@ -593,6 +603,21 @@ func cmdClaim(args []string) {
 		// returned by the --json path, so machine output stays clean.
 		fmt.Println("  Free, no card. How it compares: https://agentdomains.co/compare")
 	})
+}
+
+// claimNudge renders the "your new name points at nothing yet" line from a
+// claim response, or "" when the claim already serves. The server sends
+// next_step verbatim (board card #613: 78.8% of claims stopped here and never
+// resolved); the fallback covers a server too old to send it, so the warning
+// does not depend on deployment order.
+func claimNudge(m map[string]any) string {
+	if serving, ok := m["serving"].(bool); !ok || serving {
+		return ""
+	}
+	if step, _ := m["next_step"].(string); step != "" {
+		return step
+	}
+	return fmt.Sprintf("no record yet — point it with: agentdomains record %v --type A --content <ip>", m["label"])
 }
 
 func cmdList(args []string) {
@@ -618,6 +643,15 @@ func cmdList(args []string) {
 				continue
 			}
 			recs, _ := sd["records"].([]any)
+			// "0 record(s)" used to be the whole story, which an agent read as
+			// fine. It isn't: a name with no record, forward, proxy or delegation
+			// answers nothing. Spell that out next to the count (board card #613).
+			// The ok guard keeps an old server (no serving field) rendering the
+			// old line instead of calling every name dead.
+			if serving, ok := sd["serving"].(bool); ok && !serving {
+				fmt.Printf("%-32v  0 record(s)  points at nothing — record/forward/proxy it\n", sd["fqdn"])
+				continue
+			}
 			fmt.Printf("%-32v  %d record(s)  delegated=%v\n", sd["fqdn"], len(recs), sd["delegated"])
 		}
 	})
@@ -650,6 +684,12 @@ func cmdGet(args []string) {
 			// The id is here because `unrecord` needs it, and this is the only
 			// place a caller can read it off.
 			fmt.Printf("  %-6v %v -> %v  (id %v)\n", rec["type"], rec["name"], rec["content"], rec["id"])
+		}
+		// Same nudge as claim and list: zero records means the name answers
+		// nothing, and `get` is the command an agent runs to check one.
+		if serving, ok := m["serving"].(bool); ok && !serving {
+			fmt.Printf("  ! no record, forward, or proxy — %v points at nothing. Point it with:\n", m["fqdn"])
+			fmt.Printf("    agentdomains record %v --type A --content <ip>   (or forward/proxy)\n", m["label"])
 		}
 	})
 }
