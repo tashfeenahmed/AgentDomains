@@ -341,6 +341,9 @@ func cmdWhoami(args []string) {
 			fmt.Printf("plan:           %s\n", plan)
 		}
 		fmt.Printf("email:          %v (verified: %v)\n", orDash(m["email"]), m["email_verified"])
+		if line := expiryLine(time.Now(), m["expires_at"]); line != "" {
+			fmt.Printf("\n  %s\n", line)
+		}
 		fmt.Printf("domains used:   %v / %s\n", m["used"], quotaOf(m))
 		if cap, ok := m["max_subdomains"].(float64); ok && cap > 0 {
 			fmt.Printf("per-account cap: %d name(s) at once\n", int(cap))
@@ -977,6 +980,32 @@ func quotaText(v any) string {
 		return fmt.Sprintf("%d", int(f))
 	}
 	return fmt.Sprintf("%v", v)
+}
+
+// expiryLine turns the server's expires_at (unix seconds, present only while
+// an account is provisional) into the line an agent cannot misread: the raw
+// epoch number says nothing about urgency, and a provisional account that
+// never validates loses its names. Returns "" when there is nothing to warn
+// about. Keep this pure — main_test.go pins it.
+func expiryLine(now time.Time, v any) string {
+	secs, ok := v.(float64)
+	if !ok {
+		return ""
+	}
+	d := time.Unix(int64(secs), 0).Sub(now)
+	if d <= 0 {
+		return "this account is past its validation deadline — validate now or the reaper deletes it and its names: agentdomains email you@example.com"
+	}
+	days := int(d.Hours() / 24)
+	if days >= 7 {
+		// Not urgent yet; still worth one line, because agents do not come back
+		// to a terminal on a calendar.
+		return fmt.Sprintf("provisional account: validate within %d days or it and its names are deleted: agentdomains email you@example.com", days)
+	}
+	if days >= 1 {
+		return fmt.Sprintf("⚠ %d day(s) left to validate this account — after that it and its names are deleted: agentdomains email you@example.com", days)
+	}
+	return fmt.Sprintf("⚠ less than 24 hours left to validate this account — after that it and its names are deleted: agentdomains email you@example.com (or agentdomains upgrade for Pro, which is never reaped)")
 }
 
 func joinAny(items []any) string {
