@@ -132,7 +132,7 @@ Source: [tashfeenahmed/AgentDomains-mcp](https://github.com/tashfeenahmed/AgentD
 | Command | What it does |
 |---|---|
 | `agentdomains signup` | Create an account; saves the API key to `~/.agentdomains/config.json` |
-| `agentdomains whoami` | Show account, quota, usage, and available domains |
+| `agentdomains whoami` | Show account, quota, usage, and available domains; while an account is still provisional it counts down the days left to validate, because an unvalidated account and its names are deleted |
 | `agentdomains email <addr>` | Attach an email so a human can validate the account |
 | `agentdomains claim <label>` | Claim `<label>.makes.fyi` (or `--domain agentdomains.co`); `--email` is required on the account's first claim; optionally `--type/--content/--host` |
 | `agentdomains list` | List your domains |
